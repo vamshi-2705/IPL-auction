@@ -149,7 +149,16 @@ export default function AuctionRoom() {
                  </div>
                )}
 
-               <PlayerCard player={currentPlayer} timer={timer} onBid={placeBid} currentUser={user} currentPurse={parseInt(participants.find(p=>p.user_id===user.userId)?.purse_balance || 0)} />
+               <PlayerCard 
+                 player={currentPlayer} 
+                 timer={timer} 
+                 onBid={placeBid} 
+                 currentUser={user} 
+                 currentPurse={parseInt(participants.find(p=>p.user_id===user.userId)?.purse_balance || 0)} 
+                 onWithdraw={withdrawBid}
+                 onVoteSkip={voteSkip}
+                 skipVotes={skipVote}
+               />
                
                <PlayerQueue queue={queue} />
 

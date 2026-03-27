@@ -44,6 +44,10 @@ export default function HostControls({ isHost, participants, settings, onUpdateS
               <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Bid Timer (s)</label>
               <input type="number" value={localSettings.bid_timer} onChange={e => setLocalSettings({...localSettings, bid_timer: parseInt(e.target.value)})} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 font-mono text-slate-100 focus:outline-none focus:border-primary" />
             </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Max Squad Size</label>
+              <input type="number" value={localSettings.max_squad} onChange={e => setLocalSettings({...localSettings, max_squad: parseInt(e.target.value)})} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 font-mono text-slate-100 focus:outline-none focus:border-primary" />
+            </div>
           </div>
 
           <div className="flex gap-4 relative z-10">

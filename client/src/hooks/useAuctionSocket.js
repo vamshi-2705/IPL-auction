@@ -77,6 +77,13 @@ export function useAuctionSocket(roomId, userId, initialStatus) {
   const endAuction = () => socket?.emit('endAuction', { roomId, userId });
   const kickUser = (targetUserId) => socket?.emit('kickUser', { roomId, hostId: userId, targetUserId });
   const closeRoom = () => socket?.emit('closeRoom', { roomId, hostId: userId });
+  const voteSkip = () => socket?.emit('voteSkip', { roomId, userId });
+  const withdrawBid = () => socket?.emit('withdrawBid', { roomId, userId });
 
-  return { socket, participants, settings, auctionStatus, currentPlayer, timer, soldLog, squads, queue, updateSettings, startAuction, placeBid, pauseAuction, resumeAuction, endAuction, kickUser, closeRoom };
+  return { 
+    socket, participants, settings, auctionStatus, currentPlayer, timer, 
+    soldLog, squads, queue, skipVote,
+    updateSettings, startAuction, placeBid, pauseAuction, resumeAuction, 
+    endAuction, kickUser, closeRoom, voteSkip, withdrawBid 
+  };
 }
