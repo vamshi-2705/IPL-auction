@@ -3,11 +3,11 @@
   "version": "1.0.0",
   "description": "IPL Auction Platform - Full Stack",
   "scripts": {
-    "install:client": "cd client && npm install",
+    "install:client": "cd client && npm install --include=dev",
     "install:server": "cd server && npm install",
     "install-all": "npm run install:server && npm run install:client",
     "build:client": "cd client && npm run build",
-    "start": "cd server && NODE_ENV=production npm start",
+    "start": "cd server && node index.js",
     "seed": "cd server && node db/seedPlayers.js"
   }
 }
