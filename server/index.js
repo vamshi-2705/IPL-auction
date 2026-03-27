@@ -26,8 +26,27 @@ app.get('/api/health', (req, res) => {
 const apiRoutes = require('./routes/api');
 app.use('/api', apiRoutes);
 
-const { setupAuctionSockets } = require('./sockets/auctionHandler');
 setupAuctionSockets(io);
+
+// Temporary Admin Routes for Remote Setup (Visit these once in browser)
+const { initializeDatabase, seedRemote } = require('./db/remoteSetup');
+app.get('/api/admin/setup', async (req, res) => {
+  try {
+    const msg = await initializeDatabase();
+    res.send(msg);
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
+
+app.get('/api/admin/seed', async (req, res) => {
+  try {
+    const msg = await seedRemote();
+    res.send(msg);
+  } catch (err) {
+    res.status(500).send(err.message);
+  }
+});
 
 // Static Assets
 if (process.env.NODE_ENV === 'production') {
