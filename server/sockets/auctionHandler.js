@@ -14,7 +14,16 @@ function setupAuctionSockets(io) {
         io.to(roomId).emit('participants_updated', res.rows);
 
         const settingsRes = await pool.query('SELECT * FROM auction_settings WHERE room_id = $1', [roomId]);
-        if (settingsRes.rowCount > 0) socket.emit('settings_updated', settingsRes.rows[0]);
+        if (settingsRes.rowCount > 0) {
+           const settings = settingsRes.rows[0];
+           socket.emit('settings_updated', settings);
+           // Initialize room timer object if missing
+           if (!roomTimers[roomId]) {
+              roomTimers[roomId] = { timeLeft: settings.bid_timer, duration: settings.bid_timer, interval: null };
+           } else {
+              roomTimers[roomId].duration = settings.bid_timer;
+           }
+        }
 
         const roomRes = await pool.query('SELECT status FROM rooms WHERE id = $1', [roomId]);
         if (roomRes.rowCount > 0) {
@@ -50,6 +59,12 @@ function setupAuctionSockets(io) {
           `UPDATE auction_settings SET purse_money = $1, bid_timer = $2, min_squad = $3, max_squad = $4, max_overseas = $5 WHERE room_id = $6`,
           [settings.purse_money, settings.bid_timer, settings.min_squad, settings.max_squad, settings.max_overseas, roomId]
         );
+        
+        // Update memory cache
+        if (roomTimers[roomId]) {
+           roomTimers[roomId].duration = settings.bid_timer;
+        }
+        
         io.to(roomId).emit('settings_updated', settings);
       } catch (err) {
         console.error('Error in updateSettings:', err);
@@ -63,6 +78,15 @@ function setupAuctionSockets(io) {
 
         const roomRes = await pool.query('SELECT mode FROM rooms WHERE id = $1', [roomId]);
         const roomMode = roomRes.rows[0]?.mode || 'mega';
+
+        // Ensure timer duration is cached
+        const settingsRes = await pool.query('SELECT bid_timer FROM auction_settings WHERE room_id = $1', [roomId]);
+        const duration = settingsRes.rows[0]?.bid_timer || 15;
+        if (!roomTimers[roomId]) {
+           roomTimers[roomId] = { timeLeft: duration, duration: duration, interval: null };
+        } else {
+           roomTimers[roomId].duration = duration;
+        }
 
         const qRes = await pool.query('SELECT count(*) FROM auction_state WHERE room_id = $1', [roomId]);
         if (parseInt(qRes.rows[0].count) === 0) {
@@ -83,14 +107,16 @@ function setupAuctionSockets(io) {
              [players[i], players[j]] = [players[j], players[i]];
            }
 
-           let insertQuery = 'INSERT INTO auction_state (room_id, player_id, current_bid, status, order_index) VALUES ';
-           const values = [];
-           players.forEach((p, i) => {
-              insertQuery += `($${i*4 + 1}, $${i*4 + 2}, $${i*4 + 3}, 'pending', $${i*4 + 4}),`;
-              values.push(roomId, p.id, p.base_price, i); // i serves as order_index
-           });
-           insertQuery = insertQuery.slice(0, -1);
-           await pool.query(insertQuery, values);
+           if (players.length > 0) {
+              let insertQuery = 'INSERT INTO auction_state (room_id, player_id, current_bid, status, order_index) VALUES ';
+              const values = [];
+              players.forEach((p, i) => {
+                 insertQuery += `($${i*4 + 1}, $${i*4 + 2}, $${i*4 + 3}, 'pending', $${i*4 + 4}),`;
+                 values.push(roomId, p.id, p.base_price, i); 
+              });
+              insertQuery = insertQuery.slice(0, -1);
+              await pool.query(insertQuery, values);
+           }
         }
 
         await pool.query("UPDATE rooms SET status = 'running' WHERE id = $1", [roomId]);
@@ -107,7 +133,6 @@ function setupAuctionSockets(io) {
           if (stateRes.rowCount === 0) return;
           
           const currentState = stateRes.rows[0];
-          
           if (parseInt(amount) <= parseInt(currentState.current_bid) && currentState.highest_bidder) return;
           
           const pRes = await pool.query('SELECT purse_balance FROM room_participants WHERE room_id = $1 AND user_id = $2', [roomId, userId]);
@@ -122,7 +147,8 @@ function setupAuctionSockets(io) {
 
           io.to(roomId).emit('bid_update', { playerId: currentState.player_id, amount: parseInt(amount), highestBidder: userId });
 
-           startTimer(roomId, io, roomTimers, true, false);
+          // Timer logic
+          startTimer(roomId, io, roomTimers, true, false);
         } catch (err) {
            console.error('Bid error:', err);
         }
@@ -197,33 +223,49 @@ async function loadNextPlayer(roomId, io, roomTimers) {
 
 async function startTimer(roomId, io, roomTimers, isReset, isResume = false) {
    try {
-      if (roomTimers[roomId]) clearInterval(roomTimers[roomId].interval);
-      
-      const settingsRes = await pool.query('SELECT bid_timer FROM auction_settings WHERE room_id = $1', [roomId]);
-      let timeLeft = settingsRes.rows[0]?.bid_timer || 15;
-      
-      if (isResume && roomTimers[roomId]?.timeLeft !== undefined) {
-         timeLeft = roomTimers[roomId].timeLeft;
-      } else if (isReset) {
-         timeLeft = Math.min((roomTimers[roomId]?.timeLeft || 0) + 5, settingsRes.rows[0]?.bid_timer || 15);
+      // 1. Immediately clear existing interval to prevent double-timers
+      if (roomTimers[roomId]?.interval) {
+         clearInterval(roomTimers[roomId].interval);
+         roomTimers[roomId].interval = null;
       }
       
+      // 2. Ensure room memory object exists
+      if (!roomTimers[roomId]) {
+         roomTimers[roomId] = { timeLeft: 15, duration: 15, interval: null };
+      }
+      
+      // 3. Determine new timeLeft (Use memory duration to avoid slow DB calls)
+      let timeLeft = roomTimers[roomId].duration || 15;
+      
+      if (isResume && roomTimers[roomId].timeLeft !== undefined) {
+         timeLeft = roomTimers[roomId].timeLeft;
+      } else if (isReset) {
+         // Reset back to full duration on every valid bid
+         timeLeft = roomTimers[roomId].duration;
+      }
+      
+      roomTimers[roomId].timeLeft = timeLeft;
       io.to(roomId).emit('timer_update', timeLeft);
       
-      roomTimers[roomId] = {
-         timeLeft,
-         interval: setInterval(async () => {
+      // 4. Start fresh interval
+      roomTimers[roomId].interval = setInterval(async () => {
+         try {
+            if (!roomTimers[roomId]) return;
+            
             roomTimers[roomId].timeLeft--;
             io.to(roomId).emit('timer_update', roomTimers[roomId].timeLeft);
             
             if (roomTimers[roomId].timeLeft <= 0) {
                clearInterval(roomTimers[roomId].interval);
+               roomTimers[roomId].interval = null;
                await handlePlayerSold(roomId, io, roomTimers);
             }
-         }, 1000)
-      };
+         } catch (tickErr) {
+            console.error('Timer tick error:', tickErr);
+         }
+      }, 1000);
    } catch (err) {
-      console.error(err);
+      console.error('startTimer Error:', err);
    }
 }
 
