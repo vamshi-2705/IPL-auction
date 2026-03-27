@@ -48,6 +48,20 @@ export function useAuctionSocket(roomId, userId, initialStatus) {
        setCurrentPlayer(null);
     });
 
+    s.on('user_kicked', ({ userId: kickedUserId }) => {
+       if (kickedUserId === userId) {
+          alert('You have been kicked from the room by the host.');
+          localStorage.removeItem('auction_user');
+          window.location.href = '/';
+       }
+    });
+
+    s.on('room_closed', () => {
+       alert('The host has closed this auction room.');
+       localStorage.removeItem('auction_user');
+       window.location.href = '/';
+    });
+
     s.on('squads_updated', setSquads);
     s.on('queue_updated', setQueue);
 
@@ -60,7 +74,9 @@ export function useAuctionSocket(roomId, userId, initialStatus) {
   const placeBid = (amount) => socket?.emit('placeBid', { roomId, userId, amount });
   const pauseAuction = () => socket?.emit('pauseAuction', { roomId, userId });
   const resumeAuction = () => socket?.emit('resumeAuction', { roomId, userId });
-   const endAuction = () => socket?.emit('endAuction', { roomId, userId });
+  const endAuction = () => socket?.emit('endAuction', { roomId, userId });
+  const kickUser = (targetUserId) => socket?.emit('kickUser', { roomId, hostId: userId, targetUserId });
+  const closeRoom = () => socket?.emit('closeRoom', { roomId, hostId: userId });
 
-  return { socket, participants, settings, auctionStatus, currentPlayer, timer, soldLog, squads, queue, updateSettings, startAuction, placeBid, pauseAuction, resumeAuction, endAuction };
+  return { socket, participants, settings, auctionStatus, currentPlayer, timer, soldLog, squads, queue, updateSettings, startAuction, placeBid, pauseAuction, resumeAuction, endAuction, kickUser, closeRoom };
 }

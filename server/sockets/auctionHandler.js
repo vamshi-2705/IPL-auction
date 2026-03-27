@@ -178,18 +178,51 @@ function setupAuctionSockets(io) {
 
      socket.on('endAuction', async ({ roomId, userId }) => {
         try {
-           console.log(`End Auction Request: Room ${roomId}, User ${userId}`);
            const hostRes = await pool.query('SELECT is_host FROM room_participants WHERE room_id = $1 AND user_id = $2', [roomId, userId]);
-           if (!hostRes.rows[0]?.is_host) {
-              console.log(`End Auction Denied: User ${userId} is not host or doesn't exist in room ${roomId}`);
-              return;
-           }
+           if (!hostRes.rows[0]?.is_host) return;
            
-           if (roomTimers[roomId]) clearInterval(roomTimers[roomId].interval);
+           if (roomTimers[roomId]?.interval) {
+              clearInterval(roomTimers[roomId].interval);
+              roomTimers[roomId].interval = null;
+           }
            await pool.query("UPDATE rooms SET status = 'finished' WHERE id = $1", [roomId]);
-           console.log(`Room ${roomId} marked as finished`);
            io.to(roomId).emit('auction_finished');
         } catch (err) { console.error('End err:', err); }
+     });
+
+     socket.on('kickUser', async ({ roomId, hostId, targetUserId }) => {
+        try {
+           const hostRes = await pool.query('SELECT is_host FROM room_participants WHERE room_id = $1 AND user_id = $2', [roomId, hostId]);
+           if (!hostRes.rows[0]?.is_host) return;
+
+           await pool.query('DELETE FROM room_participants WHERE room_id = $1 AND user_id = $2', [roomId, targetUserId]);
+           
+           // Notify everyone that participants changed
+           const res = await pool.query('SELECT * FROM room_participants WHERE room_id = $1', [roomId]);
+           io.to(roomId).emit('participants_updated', res.rows);
+           
+           // Specifically notify the kicked user
+           io.to(roomId).emit('user_kicked', { userId: targetUserId });
+        } catch (err) {
+           console.error('Kick error:', err);
+        }
+     });
+
+     socket.on('closeRoom', async ({ roomId, hostId }) => {
+        try {
+           const hostRes = await pool.query('SELECT is_host FROM room_participants WHERE room_id = $1 AND user_id = $2', [roomId, hostId]);
+           if (!hostRes.rows[0]?.is_host) return;
+
+           if (roomTimers[roomId]?.interval) {
+              clearInterval(roomTimers[roomId].interval);
+              roomTimers[roomId].interval = null;
+           }
+
+           await pool.query("UPDATE rooms SET status = 'finished' WHERE id = $1", [roomId]);
+           io.to(roomId).emit('room_closed');
+        } catch (err) {
+           console.error('Close room error:', err);
+        }
      });
 
   });

@@ -1,4 +1,4 @@
-import { Users, Globe } from 'lucide-react';
+import { Users, Globe, UserMinus } from 'lucide-react';
 
 const getRoleBadge = (role) => {
    if (role === 'Wicket Keeper') return 'WK';
@@ -8,7 +8,7 @@ const getRoleBadge = (role) => {
    return 'UKN';
 };
 
-export default function TeamsSidebar({ participants, currentUser, squads = [] }) {
+export default function TeamsSidebar({ participants, currentUser, squads = [], onKick }) {
   return (
     <div className="flex w-full lg:w-[350px] flex-col border-r border-slate-800 bg-card overflow-y-auto overflow-x-hidden p-5 custom-scroll h-full">
        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6 flex items-center justify-between sticky top-0 bg-card z-10 py-2">
@@ -26,10 +26,23 @@ export default function TeamsSidebar({ participants, currentUser, squads = [] })
              <div className="flex justify-between items-start mb-3">
                <div>
                  <span className="font-bold text-slate-200 block text-lg leading-tight mb-1 truncate max-w-[150px]">{p.username}</span>
-                 {p.user_id === currentUser.userId && <span className="text-[10px] bg-primary text-white px-2 py-0.5 rounded uppercase font-bold tracking-wider mr-1">YOU</span>}
-                 {p.is_host && <span className="text-[10px] bg-amber-500/20 text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded uppercase font-bold tracking-wider">HOST</span>}
+                 <div className="flex flex-wrap gap-1 items-center">
+                    {p.user_id === currentUser.userId && <span className="text-[10px] bg-primary text-white px-2 py-0.5 rounded uppercase font-bold tracking-wider mr-1">YOU</span>}
+                    {p.is_host && <span className="text-[10px] bg-amber-500/20 text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded uppercase font-bold tracking-wider">HOST</span>}
+                 </div>
                </div>
-               <span className="text-xs px-2.5 py-1 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 font-bold ml-2">{p.team}</span>
+               <div className="flex flex-col items-end gap-2">
+                 <span className="text-xs px-2.5 py-1 bg-slate-800 border border-slate-700 rounded-lg text-slate-300 font-bold ml-2">{p.team}</span>
+                 {currentUser.isHost && !p.is_host && (
+                    <button 
+                      onClick={() => onKick && onKick(p.user_id)}
+                      className="p-1.5 rounded-lg bg-red-500/10 text-red-500 border border-red-500/20 hover:bg-red-500 hover:text-white transition-all shadow-sm"
+                      title={`Kick ${p.username}`}
+                    >
+                      <UserMinus className="w-3.5 h-3.5" />
+                    </button>
+                 )}
+               </div>
              </div>
              
              <div className="mt-4 pt-4 border-t border-slate-800 flex justify-between items-center">

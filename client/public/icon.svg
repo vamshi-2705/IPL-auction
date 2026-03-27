@@ -1,0 +1,20 @@
+<svg width="512" height="512" viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4f46e5;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3b82f6;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="8" stdDeviation="15" flood-color="#000" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+  <circle cx="256" cy="256" r="240" fill="url(#grad)" />
+  <g filter="url(#shadow)">
+    <!-- Hammer Head -->
+    <rect x="200" y="160" width="112" height="60" rx="10" fill="#f59e0b" />
+    <!-- Hammer Handle -->
+    <rect x="246" y="210" width="20" height="120" rx="5" fill="#f59e0b" />
+    <!-- Text Elements -->
+    <text x="256" y="420" text-anchor="middle" font-family="Arial, sans-serif" font-weight="900" font-size="64" fill="white">IPL</text>
+  </g>
+</svg>

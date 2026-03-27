@@ -95,6 +95,12 @@ export default function AuctionRoom() {
     }
   }, [soldLog, participants]);
 
+  const handleCloseRoom = () => {
+    if (window.confirm("Are you sure you want to CLOSE this room for everyone?")) {
+      closeRoom();
+    }
+  };
+
   if (!user) return <div className="min-h-screen bg-background flex items-center justify-center text-primary font-bold text-xl animate-pulse">Loading Room Data...</div>;
 
   return (
@@ -109,6 +115,9 @@ export default function AuctionRoom() {
          </div>
          <div className="flex items-center gap-4">
            {user.isHost && (
+             <button onClick={handleCloseRoom} className="text-[10px] bg-red-500/10 text-red-500 border border-red-500/20 px-3 py-1.5 rounded font-black tracking-widest uppercase hover:bg-red-500 hover:text-white transition-all">Close Room</button>
+           )}
+           {user.isHost && (
              <span className="flex items-center gap-1.5 text-xs font-black tracking-widest text-amber-500 bg-amber-500/10 border border-amber-500/20 px-4 py-2 rounded-full shadow-lg">
                <ShieldAlert className="w-4 h-4" /> HOST
              </span>
@@ -122,7 +131,7 @@ export default function AuctionRoom() {
       <div className="flex-1 flex w-full h-[calc(100vh-4rem)] relative overflow-hidden">
         {/* Teams Sidebar - Responsive Toggle */}
         <div className={`${activeTab === 'teams' ? 'flex w-full' : 'hidden'} lg:flex lg:w-[350px] h-full`}>
-          <TeamsSidebar participants={participants} currentUser={user} squads={squads} />
+          <TeamsSidebar participants={participants} currentUser={user} squads={squads} onKick={kickUser} />
         </div>
         
         {/* Center Dashboard - Responsive Toggle */}
