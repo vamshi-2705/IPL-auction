@@ -26,6 +26,7 @@ app.get('/api/health', (req, res) => {
 const apiRoutes = require('./routes/api');
 app.use('/api', apiRoutes);
 
+const { setupAuctionSockets } = require('./sockets/auctionHandler');
 setupAuctionSockets(io);
 
 // Temporary Admin Routes for Remote Setup (Visit these once in browser)
