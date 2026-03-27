@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS players (
 CREATE TABLE IF NOT EXISTS room_participants (
     room_id VARCHAR(50),
     user_id VARCHAR(50),
+    username VARCHAR(100),
+    team VARCHAR(20),
     is_host BOOLEAN DEFAULT false,
     purse_balance BIGINT DEFAULT 1200000000,
     PRIMARY KEY (room_id, user_id)
