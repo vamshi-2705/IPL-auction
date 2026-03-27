@@ -1,5 +1,6 @@
 const express = require('express');
 const http = require('http');
+const path = require('path');
 const { Server } = require('socket.io');
 const cors = require('cors');
 require('dotenv').config();
@@ -13,7 +14,7 @@ app.use(express.json());
 
 const io = new Server(server, {
   cors: {
-    origin: "*", // Allow all in dev
+    origin: "*", 
     methods: ["GET", "POST"]
   }
 });
@@ -28,17 +29,17 @@ app.use('/api', apiRoutes);
 const { setupAuctionSockets } = require('./sockets/auctionHandler');
 setupAuctionSockets(io);
 
-// Serve Static Assets in Production
-const path = require('path');
+// Static Assets
 if (process.env.NODE_ENV === 'production') {
-  app.use(express.static(path.join(__dirname, '../client/dist')));
+  const distPath = path.join(__dirname, '../client/dist');
+  app.use(express.static(distPath));
   
   app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '../client/dist', 'index.html'));
+    res.sendFile(path.join(distPath, 'index.html'));
   });
 }
 
 const PORT = process.env.PORT || 4000;
 server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+  console.log(`Server running on port ${PORT} in ${process.env.NODE_ENV || 'development'} mode`);
 });
