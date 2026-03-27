@@ -2,6 +2,7 @@ const { pool } = require('../db/pool');
 
 function setupAuctionSockets(io) {
   const roomTimers = {};
+  const skipVotes = {};  // { roomId: Set of userIds who voted to skip }
   
   io.on('connection', (socket) => {
     
@@ -90,10 +91,23 @@ function setupAuctionSockets(io) {
 
         const qRes = await pool.query('SELECT count(*) FROM auction_state WHERE room_id = $1', [roomId]);
         if (parseInt(qRes.rows[0].count) === 0) {
-           // Fetch all players for a truly random shuffle (ignore categories if requested)
-           const playersRes = await pool.query("SELECT id, base_price FROM players ORDER BY RANDOM()");
+           let playersQuery = "SELECT id, base_price FROM players WHERE auction_mode = 'mega'";
+           
+           if (roomMode === 'legends') {
+               playersQuery = "SELECT id, base_price FROM players WHERE auction_mode = 'legends'";
+           } else if (roomMode === 'legendsUpgraded') {
+               playersQuery = "SELECT id, base_price FROM players"; 
+           }
+
+           const playersRes = await pool.query(playersQuery);
            const players = playersRes.rows;
            
+           // Shuffle players using Fisher-Yates algorithm
+           for (let i = players.length - 1; i > 0; i--) {
+             const j = Math.floor(Math.random() * (i + 1));
+             [players[i], players[j]] = [players[j], players[i]];
+           }
+
            if (players.length > 0) {
               let insertQuery = 'INSERT INTO auction_state (room_id, player_id, current_bid, status, order_index) VALUES ';
               const values = [];
@@ -108,7 +122,7 @@ function setupAuctionSockets(io) {
 
         await pool.query("UPDATE rooms SET status = 'running' WHERE id = $1", [roomId]);
         io.to(roomId).emit('auction_started');
-        loadNextPlayer(roomId, io, roomTimers);
+        loadNextPlayer(roomId, io, roomTimers, skipVotes);
       } catch (err) {
          console.error('Error starting auction:', err);
       }
@@ -125,17 +139,12 @@ function setupAuctionSockets(io) {
           const pRes = await pool.query('SELECT purse_balance FROM room_participants WHERE room_id = $1 AND user_id = $2', [roomId, userId]);
           if (pRes.rowCount === 0 || parseInt(pRes.rows[0].purse_balance) < parseInt(amount)) return;
 
-          // Store previous bid for Withdraw functionality
           await pool.query(
-             'UPDATE auction_state SET current_bid = $1, highest_bidder = $2, prev_bid = $3, prev_bidder = $4 WHERE room_id = $5 AND player_id = $6',
-             [parseInt(amount), userId, currentState.current_bid, currentState.highest_bidder, roomId, currentState.player_id]
+             'UPDATE auction_state SET current_bid = $1, highest_bidder = $2 WHERE room_id = $3 AND player_id = $4',
+             [parseInt(amount), userId, roomId, currentState.player_id]
           );
 
           await pool.query('INSERT INTO bids (room_id, player_id, user_id, amount) VALUES ($1, $2, $3, $4)', [roomId, currentState.player_id, userId, parseInt(amount)]);
-
-          // Reset skip votes on new bid
-          if (roomTimers[roomId]) roomTimers[roomId].skipVotes = new Set();
-          io.to(roomId).emit('skip_vote_count', 0);
 
           io.to(roomId).emit('bid_update', { playerId: currentState.player_id, amount: parseInt(amount), highestBidder: userId });
 
@@ -217,62 +226,84 @@ function setupAuctionSockets(io) {
         }
      });
 
-     socket.on('voteSkip', async ({ roomId, userId }) => {
+     // ── Democratic Skip Voting ──
+     socket.on('skipVote', async ({ roomId, userId }) => {
         try {
-           if (!roomTimers[roomId]) return;
-           if (!roomTimers[roomId].skipVotes) roomTimers[roomId].skipVotes = new Set();
-           
-           roomTimers[roomId].skipVotes.add(userId);
-           
-           const participantsRes = await pool.query('SELECT user_id FROM room_participants WHERE room_id = $1', [roomId]);
-           const totalParticipants = participantsRes.rowCount;
-           const currentVotes = roomTimers[roomId].skipVotes.size;
-           
-           io.to(roomId).emit('skip_vote_count', { current: currentVotes, total: totalParticipants });
-           
-           if (currentVotes >= totalParticipants && totalParticipants > 0) {
-              // Trigger skip
-              if (roomTimers[roomId].interval) clearInterval(roomTimers[roomId].interval);
-              roomTimers[roomId].skipVotes = new Set();
-              io.to(roomId).emit('skip_vote_count', { current: 0, total: totalParticipants });
-              await handlePlayerSold(roomId, io, roomTimers);
+           if (!skipVotes[roomId]) skipVotes[roomId] = new Set();
+           skipVotes[roomId].add(userId);
+
+           const pRes = await pool.query('SELECT count(*) FROM room_participants WHERE room_id = $1', [roomId]);
+           const totalParticipants = parseInt(pRes.rows[0].count);
+
+           io.to(roomId).emit('skip_votes_updated', {
+              count: skipVotes[roomId].size,
+              total: totalParticipants
+           });
+
+           if (skipVotes[roomId].size >= totalParticipants) {
+              // All participants voted — skip (mark unsold)
+              if (roomTimers[roomId]?.interval) {
+                 clearInterval(roomTimers[roomId].interval);
+                 roomTimers[roomId].interval = null;
+              }
+              const stateRes = await pool.query('SELECT player_id FROM auction_state WHERE room_id = $1 AND status = $2', [roomId, 'active']);
+              if (stateRes.rowCount > 0) {
+                 await pool.query("UPDATE auction_state SET status = 'unsold' WHERE room_id = $1 AND player_id = $2", [roomId, stateRes.rows[0].player_id]);
+                 io.to(roomId).emit('player_unsold', { playerId: stateRes.rows[0].player_id });
+              }
+              skipVotes[roomId] = new Set();
+              setTimeout(() => loadNextPlayer(roomId, io, roomTimers, skipVotes), 2000);
            }
         } catch (err) {
-           console.error('Skip Vote Error:', err);
+           console.error('Skip vote error:', err);
         }
      });
 
+     // ── Withdraw Bid ──
      socket.on('withdrawBid', async ({ roomId, userId }) => {
         try {
            const stateRes = await pool.query('SELECT * FROM auction_state WHERE room_id = $1 AND status = $2', [roomId, 'active']);
            if (stateRes.rowCount === 0) return;
-           
-           const currentState = stateRes.rows[0];
-           if (currentState.highest_bidder !== userId) return; // Only bidder can withdraw
+           const current = stateRes.rows[0];
+           if (current.highest_bidder !== userId) return; // only highest bidder can withdraw
 
-           // Revert to previous bid/bidder
-           const prevBid = currentState.prev_bid || currentState.base_price;
-           const prevBidder = currentState.prev_bidder || null;
-
-           await pool.query(
-              'UPDATE auction_state SET current_bid = $1, highest_bidder = $2, prev_bid = NULL, prev_bidder = NULL WHERE room_id = $3 AND player_id = $4',
-              [prevBid, prevBidder, roomId, currentState.player_id]
+           // Find previous bid
+           const prevBidRes = await pool.query(
+              'SELECT user_id, amount FROM bids WHERE room_id = $1 AND player_id = $2 AND user_id != $3 ORDER BY id DESC LIMIT 1',
+              [roomId, current.player_id, userId]
            );
 
-           io.to(roomId).emit('bid_update', { playerId: currentState.player_id, amount: prevBid, highestBidder: prevBidder });
-           
-           // Optionally restart timer
+           let newBid, newBidder;
+           if (prevBidRes.rowCount > 0) {
+              newBid = parseInt(prevBidRes.rows[0].amount);
+              newBidder = prevBidRes.rows[0].user_id;
+           } else {
+              // No previous bid => revert to base price with no bidder
+              const playerRes = await pool.query('SELECT base_price FROM players WHERE id = $1', [current.player_id]);
+              newBid = parseInt(playerRes.rows[0].base_price);
+              newBidder = null;
+           }
+
+           await pool.query(
+              'UPDATE auction_state SET current_bid = $1, highest_bidder = $2 WHERE room_id = $3 AND player_id = $4',
+              [newBid, newBidder, roomId, current.player_id]
+           );
+
+           io.to(roomId).emit('bid_update', { playerId: current.player_id, amount: newBid, highestBidder: newBidder });
            startTimer(roomId, io, roomTimers, true, false);
         } catch (err) {
-           console.error('Withdraw err:', err);
+           console.error('Withdraw error:', err);
         }
      });
 
   });
 }
 
-async function loadNextPlayer(roomId, io, roomTimers) {
+async function loadNextPlayer(roomId, io, roomTimers, skipVotesRef) {
    try {
+     // Clear skip votes for the new player
+     if (skipVotesRef) skipVotesRef[roomId] = new Set();
+
      const nextRes = await pool.query('SELECT * FROM auction_state WHERE room_id = $1 AND status = $2 ORDER BY order_index ASC LIMIT 1', [roomId, 'pending']);
      if (nextRes.rowCount === 0) {
          await pool.query("UPDATE rooms SET status = 'finished' WHERE id = $1", [roomId]);
@@ -370,7 +401,7 @@ async function handlePlayerSold(roomId, io, roomTimers) {
 
       await broadcastSquads(roomId, io);
 
-      setTimeout(() => loadNextPlayer(roomId, io, roomTimers), 3000);
+      setTimeout(() => loadNextPlayer(roomId, io, roomTimers, null), 3000);
    } catch (err) {
       await pool.query('ROLLBACK');
       console.error(err);

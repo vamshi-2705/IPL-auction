@@ -29,8 +29,9 @@ export default function AuctionRoom() {
   }, [roomId, navigate]);
 
   const {
-    participants, settings, auctionStatus, currentPlayer, timer, soldLog, squads, queue,
-    updateSettings, startAuction, placeBid, pauseAuction, resumeAuction, endAuction
+    participants, settings, auctionStatus, currentPlayer, timer, soldLog, squads, queue, skipInfo,
+    updateSettings, startAuction, placeBid, pauseAuction, resumeAuction, endAuction,
+    kickUser, closeRoom, skipVote, withdrawBid
   } = useAuctionSocket(roomId, user?.userId);
 
   const prevSoldLength = useRef(0);
@@ -149,16 +150,7 @@ export default function AuctionRoom() {
                  </div>
                )}
 
-               <PlayerCard 
-                 player={currentPlayer} 
-                 timer={timer} 
-                 onBid={placeBid} 
-                 currentUser={user} 
-                 currentPurse={parseInt(participants.find(p=>p.user_id===user.userId)?.purse_balance || 0)} 
-                 onWithdraw={withdrawBid}
-                 onVoteSkip={voteSkip}
-                 skipVotes={skipVote}
-               />
+               <PlayerCard player={currentPlayer} timer={timer} onBid={placeBid} onWithdraw={withdrawBid} onSkip={skipVote} skipInfo={skipInfo} currentUser={user} currentPurse={parseInt(participants.find(p=>p.user_id===user.userId)?.purse_balance || 0)} />
                
                <PlayerQueue queue={queue} />
 

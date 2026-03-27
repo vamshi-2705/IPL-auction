@@ -35,7 +35,7 @@ export default function HostControls({ isHost, participants, settings, onUpdateS
             <Settings className="text-primary w-6 h-6" /> Auction Settings
           </h2>
 
-          <div className="grid grid-cols-2 gap-6 mb-8 relative z-10">
+          <div className="grid grid-cols-3 gap-6 mb-8 relative z-10">
             <div>
               <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Purse Money (₹)</label>
               <input type="number" value={localSettings.purse_money} onChange={e => setLocalSettings({...localSettings, purse_money: parseInt(e.target.value)})} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 font-mono text-slate-100 focus:outline-none focus:border-primary" />
@@ -45,7 +45,7 @@ export default function HostControls({ isHost, participants, settings, onUpdateS
               <input type="number" value={localSettings.bid_timer} onChange={e => setLocalSettings({...localSettings, bid_timer: parseInt(e.target.value)})} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 font-mono text-slate-100 focus:outline-none focus:border-primary" />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Max Squad Size</label>
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-widest mb-2">Max Squad</label>
               <input type="number" value={localSettings.max_squad} onChange={e => setLocalSettings({...localSettings, max_squad: parseInt(e.target.value)})} className="w-full bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 font-mono text-slate-100 focus:outline-none focus:border-primary" />
             </div>
           </div>
