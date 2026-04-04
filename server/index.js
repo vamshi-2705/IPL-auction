@@ -54,7 +54,16 @@ if (process.env.NODE_ENV === 'production') {
   const distPath = path.join(__dirname, '../client/dist');
   app.use(express.static(distPath));
   
+  // Hard 404 for missing static assets to prevent returning index.html as a module script
+  app.get('/assets/*', (req, res) => {
+    res.status(404).send('Not Found');
+  });
+  
   app.get('*', (req, res) => {
+    // Prevent aggressive caching of the index.html so clients always get the latest hashed JS references
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     res.sendFile(path.join(distPath, 'index.html'));
   });
 }
