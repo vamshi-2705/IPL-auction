@@ -1,4 +1,4 @@
-import { Users, Globe, UserMinus } from 'lucide-react';
+import { Users, Globe, UserMinus, Mic, MicOff } from 'lucide-react';
 
 const getRoleBadge = (role) => {
    if (role === 'Wicket Keeper') return 'WK';
@@ -8,7 +8,7 @@ const getRoleBadge = (role) => {
    return 'UKN';
 };
 
-export default function TeamsSidebar({ participants, currentUser, squads = [], onKick }) {
+export default function TeamsSidebar({ participants, currentUser, squads = [], onKick, voiceUsers = {}, localVoice = {} }) {
   return (
     <div className="flex w-full lg:w-[350px] flex-col border-r border-slate-800 bg-card overflow-y-auto overflow-x-hidden p-5 custom-scroll h-full">
        <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-6 flex items-center justify-between sticky top-0 bg-card z-10 py-2">
@@ -25,7 +25,22 @@ export default function TeamsSidebar({ participants, currentUser, squads = [], o
            <div key={p.user_id} className={`p-5 rounded-2xl border transition-all ${p.user_id === currentUser.userId ? 'bg-primary/5 border-primary/40 shadow-[0_0_15px_rgba(139,92,246,0.1)]' : 'bg-slate-900/50 border-slate-800'}`}>
              <div className="flex justify-between items-start mb-3">
                <div>
-                 <span className="font-bold text-slate-200 block text-lg leading-tight mb-1 truncate max-w-[150px]">{p.username}</span>
+                 <div className="flex items-center gap-2 mb-1">
+                   <span className="font-bold text-slate-200 block text-lg leading-tight truncate max-w-[150px]">{p.username}</span>
+                   {p.user_id === currentUser.userId ? (
+                     localVoice.isConnected && (
+                       <span className={`flex items-center justify-center rounded-full p-1 border ${localVoice.isMuted ? 'bg-red-500/10 border-red-500/30 text-red-500' : 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400'}`}>
+                         {localVoice.isMuted ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
+                       </span>
+                     )
+                   ) : (
+                     voiceUsers[p.user_id] && (
+                       <span className={`flex flex-shrink-0 items-center justify-center rounded-full p-1 border transition-all ${voiceUsers[p.user_id].isMuted ? 'bg-red-500/10 border-red-500/30 text-red-500' : voiceUsers[p.user_id].isSpeaking ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-400 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : 'bg-slate-800 border-slate-700 text-slate-400'}`}>
+                         {voiceUsers[p.user_id].isMuted ? <MicOff className="w-3 h-3" /> : <Mic className="w-3 h-3" />}
+                       </span>
+                     )
+                   )}
+                 </div>
                  <div className="flex flex-wrap gap-1 items-center">
                     {p.user_id === currentUser.userId && <span className="text-[10px] bg-primary text-white px-2 py-0.5 rounded uppercase font-bold tracking-wider mr-1">YOU</span>}
                     {p.is_host && <span className="text-[10px] bg-amber-500/20 text-amber-500 border border-amber-500/30 px-2 py-0.5 rounded uppercase font-bold tracking-wider">HOST</span>}

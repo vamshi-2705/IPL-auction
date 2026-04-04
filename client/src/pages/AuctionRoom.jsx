@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuctionSocket } from '../hooks/useAuctionSocket';
+import { useVoiceChat } from '../hooks/useVoiceChat';
 import HostControls from '../components/HostControls';
 import PlayerCard from '../components/PlayerCard';
 import PlayerQueue from '../components/PlayerQueue';
@@ -9,7 +10,15 @@ import AuctionRightPanel from '../components/AuctionRightPanel';
 import AuctionSummary from '../components/AuctionSummary';
 import CelebrationOverlay from '../components/CelebrationOverlay';
 import MobileNav from '../components/MobileNav';
-import { ShieldAlert, PauseCircle, PlayCircle, StopCircle } from 'lucide-react';
+import { ShieldAlert, PauseCircle, PlayCircle, StopCircle, Mic, MicOff, LogOut } from 'lucide-react';
+
+const AudioRenderer = ({ stream }) => {
+  const ref = useRef(null);
+  useEffect(() => {
+    if (ref.current && stream) ref.current.srcObject = stream;
+  }, [stream]);
+  return <audio autoPlay ref={ref} className="hidden" />;
+};
 
 export default function AuctionRoom() {
   const { id: roomId } = useParams();
@@ -29,10 +38,14 @@ export default function AuctionRoom() {
   }, [roomId, navigate]);
 
   const {
-    participants, settings, auctionStatus, currentPlayer, timer, soldLog, squads, queue, skipInfo,
+    socket, participants, settings, auctionStatus, currentPlayer, timer, soldLog, squads, queue, skipInfo,
     updateSettings, startAuction, placeBid, pauseAuction, resumeAuction, endAuction,
     kickUser, closeRoom, skipVote, withdrawBid
   } = useAuctionSocket(roomId, user?.userId);
+
+  const { isConnected, isMuted, voiceUsers, joinVoice, leaveVoice, toggleMute } = useVoiceChat({ 
+    socket, roomId, userId: user?.userId 
+  });
 
   const prevSoldLength = useRef(0);
 
@@ -115,6 +128,25 @@ export default function AuctionRoom() {
            </div>
          </div>
          <div className="flex items-center gap-4">
+           
+           {/* Voice Chat Controls */}
+           <div className="hidden sm:flex items-center gap-3 mr-2">
+             {!isConnected ? (
+                <button onClick={joinVoice} className="text-[11px] font-black tracking-wider text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-4 py-1.5 rounded-full hover:bg-emerald-500 hover:text-white transition-all shadow-lg flex items-center gap-1.5 uppercase">
+                   <Mic className="w-3.5 h-3.5" /> Join Voice
+                </button>
+             ) : (
+                <div className="flex items-center gap-2 bg-slate-900 border border-slate-700 p-1 rounded-full shadow-inner">
+                   <button onClick={toggleMute} className={`p-2 rounded-full text-white transition-colors shadow-lg ${isMuted ? 'bg-red-500 hover:bg-red-400' : 'bg-emerald-500 hover:bg-emerald-400'}`}>
+                      {isMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+                   </button>
+                   <button onClick={leaveVoice} title="Leave Voice" className="p-2 rounded-full text-slate-400 hover:text-red-400 hover:bg-red-500/10 transition-colors">
+                      <LogOut className="w-3.5 h-3.5" />
+                   </button>
+                </div>
+             )}
+           </div>
+
            {user.isHost && (
              <button onClick={handleCloseRoom} className="text-[10px] bg-red-500/10 text-red-500 border border-red-500/20 px-3 py-1.5 rounded font-black tracking-widest uppercase hover:bg-red-500 hover:text-white transition-all">Close Room</button>
            )}
@@ -132,7 +164,7 @@ export default function AuctionRoom() {
       <div className="flex-1 flex w-full h-[calc(100vh-4rem)] relative overflow-hidden">
         {/* Teams Sidebar - Responsive Toggle */}
         <div className={`${activeTab === 'teams' ? 'flex w-full' : 'hidden'} lg:flex lg:w-[350px] h-full`}>
-          <TeamsSidebar participants={participants} currentUser={user} squads={squads} onKick={kickUser} />
+          <TeamsSidebar participants={participants} currentUser={user} squads={squads} onKick={kickUser} voiceUsers={voiceUsers} localVoice={{ isConnected, isMuted }} />
         </div>
         
         {/* Center Dashboard - Responsive Toggle */}
@@ -193,6 +225,11 @@ export default function AuctionRoom() {
       
       <MobileNav activeTab={activeTab} setActiveTab={setActiveTab} />
       <CelebrationOverlay data={celebrationData} onComplete={() => setCelebrationData(null)} />
+      
+      {/* Invisible Voice Chat Components */}
+      {Object.entries(voiceUsers).map(([peerId, userState]) => (
+         <AudioRenderer key={peerId} stream={userState.stream} />
+      ))}
     </div>
   );
 }

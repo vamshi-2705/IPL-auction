@@ -295,6 +295,23 @@ function setupAuctionSockets(io) {
            console.error('Withdraw error:', err);
         }
      });
+     // ── WebRTC Voice Chat ──
+     socket.on('voice_join', ({ roomId, userId }) => {
+         socket.to(roomId).emit('user_joined_voice', { userId });
+     });
+
+     socket.on('webrtc_signal', ({ roomId, targetUserId, callerUserId, signal }) => {
+         // Broadcast to room. The client will ignore if targetUserId !== myUserId.
+         socket.to(roomId).emit('webrtc_signal', { targetUserId, callerUserId, signal });
+     });
+
+     socket.on('voice_status', ({ roomId, userId, isMuted, isSpeaking }) => {
+         socket.to(roomId).emit('voice_status_update', { userId, isMuted, isSpeaking });
+     });
+
+     socket.on('voice_leave', ({ roomId, userId }) => {
+         socket.to(roomId).emit('user_left_voice', { userId });
+     });
 
   });
 }
